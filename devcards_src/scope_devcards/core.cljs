@@ -1,16 +1,16 @@
 (ns scope-devcards.core
-    (:require
-     [devcards.core :as dc :include-macros true]
-     [scope.core :as scope]
-     [om.core :as om :include-macros true]
-     [om.dom :as dom :include-macros true]
-     [sablono.core :as sab :include-macros true]
-     [goog.events :as events]
-     [cljs.core.async :as async :refer [>! <! put! chan]])
-    (:require-macros
-     [devcards.core :refer [defcard is are= are-not=]]
-     [cljs.core.async.macros :refer [go]])
-    (:import [goog.events EventType]))
+  (:require
+   [devcards.core :as dc :include-macros true]
+   [scope.core :as scope]
+   [om.core :as om :include-macros true]
+   [om.dom :as dom :include-macros true]
+   [sablono.core :as sab :include-macros true]
+   [goog.events :as events]
+   [cljs.core.async :as async :refer [>! <! put! chan]])
+  (:require-macros
+   [devcards.core :refer [defcard is are= are-not=]]
+   [cljs.core.async.macros :refer [go]])
+  (:import [goog.events EventType]))
 
 (enable-console-print!)
 
@@ -20,78 +20,32 @@
 ;; remember to run lein figwheel and then browse to
 ;; http://localhost:3449/devcards/index.html
 
-#_ (defcard devcard-intro
-  (dc/markdown-card
-   "# Devcards for scope
+;; -------------------- Helpers --------------------
 
-    I can be found in `devcards_src/scope_devcards/core.cljs`.
-
-    If you add cards to this file, they will appear here on this page.
-
-    You can add devcards to any file as long as you require
-    `devcards.core` like so:
-
-    ```
-    (:require [devcards.core :as dc :include-macros true])
-    ```
-
-    As you add cards to other namspaces, those namspaces will
-    be listed on the Devcards **home** page.
-
-    <a href=\"https://github.com/bhauman/devcards/blob/master/example_src/devdemos/core.cljs\" target=\"_blank\">Here are some Devcard examples</a>"))
-
-#_ (defn widget [data owner]
-  (reify
-    om/IRender
-    (render [this]
-      (sab/html [:h2 "This is an om card, " (:text data)]))))
-
-#_ (defcard omcard-ex
-    (dc/om-root-card widget {:text "yozers"}))
-
-(defn listen [el & types]
-  (let [out (chan)]
-    (doall (map (fn [type] (events/listen el type #(put! out %))) types))
-    out))
+(defn listen
+  ;; TODO: Factor chan creation out (jw 14-09-26)
+  ([el types]
+     (let [out (chan)]
+       (doall (map (fn [type] (events/listen el type #(put! out %))) types))
+       out))
+  ([el buffer-max types]
+     (let [out (chan (async/sliding-buffer buffer-max))]
+       (doall (map (fn [type] (events/listen el type #(put! out %))) types))
+       out))
+  )
 
 (defn set-states! [owner desired]
   (doall (map #(om/set-state! owner (key %) (val %)) desired)))
 
-(defn scrubbing-int-app-event-view-2 [app owner]
-  (reify
-    om/IInitState
-    (init-state [_]
-      {:capturing false
-       :start-x nil})
-    om/IWillMount
-    (will-mount [_]
-      (let [mouse-chan (async/map (fn [e] {:x (.-clientX e)
-                                           :type (.-type e)})
-                        [(listen js/window EventType.MOUSEMOVE EventType.MOUSEUP)])]
-        (go (while true?
-              (let [evt (<! mouse-chan)]
-                (if (om/get-state owner :capturing)
-                  (case (:type evt)
-                    "mousemove" (let [difference (- (:x evt) (om/get-state owner :start-x))]
-                                  (om/transact! app :my-val (partial + difference))
-                                  (om/set-state! owner :start-x (:x evt)))
-                    "mouseup" (set-states! owner {:capturing false :start-x nil}))))))))
-    om/IRenderState
-    (render-state [_ state]
-      (dom/div nil
-               (dom/span #js { :style #js {:color (if (:capturing state) "#00f" "#000")
-                                           :border-bottom "1px dotted #00f"
-                                           :cursor "col-resize"
-                                           :-webkit-user-select "none"}
-                              :onMouseDown #(set-states! owner {:capturing true :start-x (.-clientX %)})}
-                         (str "Current state is: " state ", Current app val is: " (:my-val app)))))))
+;; -------------------- Helpers --------------------
 
-(defcard om-int-app-event-scrubber-2
-  (dc/om-root-card scrubbing-int-app-event-view-2 {:my-val 0}))
-
-(defn sin-seq [f]
-  (apply str (for [x (range (* 2 f))]
-               (str "l" (/ 50 f) "," (* 15 (.sin js/Math x))  " "))))
+(defn sin-seq
+  "Given a frequency, generate a sequence to use as the :d value of an svg path element."
+  [freq]
+  ;; TODO: Need to scale these so that low values don't cause jaggies  (jw 14-09-26)
+  (apply str (for [x (range (* 2 freq))]
+               (str "l" (/ 50 freq) ","
+                    (* 15 (.sin js/Math x)) " "))))
 
 (defn graph [freq]
   [:div [:svg
@@ -107,17 +61,25 @@
          ]]
   )
 
+(defn simplify-event
+  [evt]
+  {:x (.-clientX evt)
+   :type (.-type evt)})
+
+(defn reset-scrubber []
+  {:capturing false
+   :start-x nil})
+
 (defn sin-scrubber [app owner]
   (reify
     om/IInitState
     (init-state [_]
-      {:capturing false
-       :start-x nil})
+      (reset-scrubber))
     om/IWillMount
     (will-mount [_]
-      (let [mouse-chan (async/map (fn [e] {:x (.-clientX e)
-                                           :type (.-type e)})
-                                  [(listen js/window EventType.MOUSEMOVE EventType.MOUSEUP)])]
+      (let [mouse-chan (async/map simplify-event
+                                  [(listen js/window 100 [EventType.MOUSEMOVE
+                                                          EventType.MOUSEUP])])]
         (go (while true?
               (let [evt (<! mouse-chan)]
                 (if (om/get-state owner :capturing)
@@ -125,7 +87,9 @@
                     "mousemove" (let [difference (- (:x evt) (om/get-state owner :start-x))]
                                   (om/transact! app :freq (partial + difference))
                                   (om/set-state! owner :start-x (:x evt)))
-                    "mouseup" (set-states! owner {:capturing false :start-x nil}))))))))
+                    "mouseup" (set-states! owner (reset-scrubber))
+                    (do (.log js/console "Got unexpected evt")
+                        (.log js/console evt)))))))))
     om/IRenderState
     (render-state [_ state]
       (sab/html [:span
