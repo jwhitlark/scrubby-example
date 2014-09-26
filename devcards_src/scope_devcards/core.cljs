@@ -91,20 +91,19 @@
 
 (defn sin-seq [f]
   (apply str (for [x (range (* 2 f))]
-               (str "l" (/ 50 f) "," (* 13 (.sin js/Math x))  " "))))
+               (str "l" (/ 50 f) "," (* 15 (.sin js/Math x))  " "))))
 
 (defn graph [freq]
   [:div [:svg
          {:style {:width "100px" :height "30px"} }
          [:path {:cs "100,100"
-                    :d "M0.5,0.5 L99.5,0.5 L99.5,29.5 L0.5,29.5 Z" ;; the box
-                    :stroke "blue" :stroke-width "1"
-                    :fill "white" :fill-opacity "0"}]
+                 :d "M0.0,0.0 L99.5,0.0 L99.5,29.5 L0.5,29.5 Z" ;; the box
+                 :stroke "blue" :stroke-width "1"
+                 :fill "white" :fill-opacity "0"}]
          [:path {:cs "100,100"
                  :d (str "M0.1,0.5" (sin-seq freq))
                  :fill "none" :stroke-width "1" :stroke-opacity "1"
-                 :stroke "green"
-                 }]
+                 :stroke "green"}]
          ]]
   )
 
@@ -113,7 +112,7 @@
     om/IInitState
     (init-state [_]
       {:capturing false
-       :freq 25})
+       :start-x nil})
     om/IWillMount
     (will-mount [_]
       (let [mouse-chan (async/map (fn [e] {:x (.-clientX e)
@@ -123,25 +122,23 @@
               (let [evt (<! mouse-chan)]
                 (if (om/get-state owner :capturing)
                   (case (:type evt)
-                    "mousemove" (let [difference (- (:x evt) (om/get-state owner :freq))]
-                                  (om/transact! app :my-val (partial + difference))
-                                  (om/set-state! owner :freq (:x evt)))
-                    "mouseup" (set-state! owner :capturing false))))))))
+                    "mousemove" (let [difference (- (:x evt) (om/get-state owner :start-x))]
+                                  (om/transact! app :freq (partial + difference))
+                                  (om/set-state! owner :start-x (:x evt)))
+                    "mouseup" (set-states! owner {:capturing false :start-x nil}))))))))
     om/IRenderState
     (render-state [_ state]
       (sab/html [:span
-                 "Frequency on sine wave: "
-                 [:span {:style #js {:color (if (:capturing state) "#00f" "#000")
-                                           :border-bottom "1px dotted #00f"
-                                           :cursor "col-resize"
-                                           :-webkit-user-select "none"}
-                               :onMouseDown #(set-states! owner {:capturing true :freq (.-clientX %)})}
-                  (str (:freq state))
-                       ]
-                  (graph (:freq state))
-                 ]
-                )))
-  )
+                 "Frequency of sine wave: "
+                 [:span {:style {:color (if (:capturing state) "#00f" "#000")
+                                 :border-bottom "1px dotted #00f"
+                                 :cursor "col-resize"
+                                 :-webkit-user-select "none"}
+                         :onMouseDown #(set-states! owner {:capturing true
+                                                           :start-x (.-clientX %)})}
+                  (str (:freq app))]
+                 (graph (:freq app))]
+                ))))
 
 (defcard om-sin-scrubber
-  (dc/om-root-card sin-scrubber {}))
+  (dc/om-root-card sin-scrubber {:freq 25}))
