@@ -26,52 +26,38 @@
 (defn by-id [id]
   (.getElementById js/document id))
 
-(defn make-listeners [el out-chan types]
-  (doall (map (fn [type] (events/listen el type #(put! out-chan %))) types)))
-
-;; (defn listen
-;;   ;; TODO: Factor chan creation out (jw 14-09-26)
-;;   ([el types]
-;;      (let [out (chan)]
-;;        (make-listeners el out types)
-;;        out))
-;;   ([el buffer-max types]
-;;      (let [out (chan (async/dropping-buffer buffer-max))]
-;;        (make-listeners el out types)
-;;        out)))
-
 (defn set-states! [owner desired]
   (doall (map #(om/set-state! owner (key %) (val %)) desired)))
 
 ;; -------------------- Helpers --------------------
 
-;; (defn calc-start [amp]
-;;   (str  "M" "0.1,"  (- 15 amp)))
+(defn calc-start [amp]
+  (str  "M" "0.1,"  (- 15 amp)))
 
-;; (defn sin-seq
-;;   "Given a frequency, generate a sequence to use as the :d value of an svg path element."
-;;   [freq amp]
-;;   ;; TODO: Need to scale these so that low values don't cause jaggies  (jw 14-09-26)
-;;   ;; TODO: pull out the str handling, just generate the numbers? (jw 14-09-27)
-;;   (str/join " "
-;;          (cons (calc-start amp)
-;;           (for [x (range (* 2 freq))]
-;;             (str "l" (/ 50 freq) ","
-;;                  (* amp (.sin js/Math x)))))))
+(defn sin-seq
+  "Given a frequency, generate a sequence to use as the :d value of an svg path element."
+  [freq amp]
+  ;; FIXME: Need to scale these so that low values don't cause jaggies  (jw 14-09-27)
+  (str/join " "
+         (cons (calc-start amp)
+          (for [x (range (* 2 freq))]
+            (str "l" (/ 50 freq) ","
+                 (* amp (.sin js/Math x)))))))
 
-;; (defn graph [freq]
-;;   [:div [:svg
-;;          {:style {:width "100px" :height "30px"} }
-;;          [:path {:cs "100,100"
-;;                  :d "M0.0,0.0 L99.5,0.0 L99.5,29.5 L0.5,29.5 Z" ;; the box
-;;                  :stroke "blue" :stroke-width "1"
-;;                  :fill "white" :fill-opacity "0"}]
-;;          [:path {:cs "100,100"
-;;                  :d (sin-seq freq 15)
-;;                   :fill "none" :stroke-width "1" :stroke-opacity "1"
-;;                  :stroke "green"}]
-;;          ]]
-;;   )
+(defn graph [freq ampl]
+  [:div [:svg
+         {:style {:width "100px" :height "30px"} }
+         ;; the frame around the graph
+         [:path {:cs "100,100"
+                 :d "M0.0,0.0 L99.5,0.0 L99.5,29.5 L0.5,29.5 Z"
+                 :stroke "blue" :stroke-width "1"
+                 :fill "white" :fill-opacity "0"}]
+         ;; graph itself
+         [:path {:cs "100,100"
+                 :d (sin-seq freq ampl)
+                  :fill "none" :stroke-width "1" :stroke-opacity "1"
+                 :stroke "green"}]
+         ]])
 
 (defn simplify-event
   [evt]
@@ -79,48 +65,6 @@
    :y (.-clientY evt)
    :type (.-type evt)
    :e evt})
-
-;; (defn reset-scrubber []
-;;   {:capturing false
-;;    :start-x nil
-;;    :start-y nil})
-
-;; (defn sin-scrubber [app owner]
-;;   (reify
-;;     om/IInitState
-;;     (init-state [_]
-;;       (reset-scrubber))
-;;     om/IWillMount
-;;     (will-mount [_]
-;;       (let [mouse-chan (async/map simplify-event
-;;                                   [(listen js/window 100 [EventType.MOUSEMOVE
-;;                                                           EventType.MOUSEUP])])]
-;;         (go (while true?
-;;               (let [evt (<! mouse-chan)]
-;;                 (if (om/get-state owner :capturing)
-;;                   (case (:type evt)
-;;                     "mousemove" (let [difference (- (:x evt) (om/get-state owner :start-x))]
-;;                                   (om/transact! app :freq (partial + difference))
-;;                                   (om/set-state! owner :start-x (:x evt)))
-;;                     "mouseup" (set-states! owner (reset-scrubber))
-;;                     (do (.log js/console "Got unexpected evt")
-;;                         (.log js/console evt)))))))))
-;;     om/IRenderState
-;;     (render-state [_ state]
-;;       (sab/html [:span
-;;                  "Frequency of sine wave: "
-;;                  [:span {:style {:color (if (:capturing state) "#00f" "#000")
-;;                                  :border-bottom "1px dotted #00f"
-;;                                  :cursor "col-resize"
-;;                                  :-webkit-user-select "none"}
-;;                          :onMouseDown #(set-states! owner {:capturing true
-;;                                                            :start-x (.-clientX %)})}
-;;                   (str (:freq app))]
-;;                  (graph (:freq app))]
-;;                 ))))
-
-;; (defcard om-sin-scrubber
-;;   (dc/om-root-card sin-scrubber {:freq 25}))
 
 (def buffer-max 100)
 
@@ -139,7 +83,7 @@
             (let [x-diff (- (.-offsetX evt) (om/get-state owner :start-x))
                   y-diff (- (.-offsetY evt) (om/get-state owner :start-y))]
               (om/transact! cursor :x (partial + x-diff))
-              (om/transact! cursor :y (partial + y-diff))
+              (om/transact! cursor :y #(- % y-diff))
               (set-states! owner {:start-x (.-offsetX evt)
                                   :start-y (.-offsetY evt)})))))
 
@@ -181,6 +125,7 @@
     [:div [:em "x: " (:x cursor) ", "]
      [:em "y: " (:y cursor)]])))
 
+
 (defn scrubbable-widget [cursor owner]
      (reify
        om/IRenderState
@@ -192,11 +137,23 @@
                      {:opts {:id "scrubbing-sine"
                              :build-fn (om/build x-y-viewer (:scrubbable cursor))}})]))))
 
+(defn sin-viewer [cursor owner]
+  (reify
+    om/IRenderState
+    (render-state [_ state]
+      (let [freq (:x (:scrubbable cursor))
+            ampl (:y (:scrubbable cursor))]
+        (sab/html (graph freq ampl))))))
+
+
 (def app-model
-  (atom {:scrubbable {:x 25 :y 10}}))
+  (atom {:scrubbable {:x 50 :y 15}}))
 
 (defcard om-generic-scrubber
   (dc/om-root-card scrubbable-widget app-model))
+
+(defcard om-sin-view
+  (dc/om-root-card sin-viewer app-model))
 
 (defcard edn-card-shared
   (dc/edn-card app-model))
