@@ -2,6 +2,7 @@
   (:require
    [devcards.core :as dc :include-macros true]
    [scope.core :as scope]
+   [clojure.string :as str]
    [om.core :as om :include-macros true]
    [om.dom :as dom :include-macros true]
    [sablono.core :as sab :include-macros true]
@@ -29,7 +30,7 @@
        (doall (map (fn [type] (events/listen el type #(put! out %))) types))
        out))
   ([el buffer-max types]
-     (let [out (chan (async/sliding-buffer buffer-max))]
+     (let [out (chan (async/dropping-buffer buffer-max))]
        (doall (map (fn [type] (events/listen el type #(put! out %))) types))
        out))
   )
@@ -39,13 +40,18 @@
 
 ;; -------------------- Helpers --------------------
 
+(defn calc-start [amp]
+  (str  "M" "0.1,"  (- 15 amp)))
+
 (defn sin-seq
   "Given a frequency, generate a sequence to use as the :d value of an svg path element."
-  [freq]
+  [freq amp]
   ;; TODO: Need to scale these so that low values don't cause jaggies  (jw 14-09-26)
-  (apply str (for [x (range (* 2 freq))]
-               (str "l" (/ 50 freq) ","
-                    (* 15 (.sin js/Math x)) " "))))
+  (str/join " "
+         (cons (calc-start amp)
+          (for [x (range (* 2 freq))]
+            (str "l" (/ 50 freq) ","
+                 (* amp (.sin js/Math x)))))))
 
 (defn graph [freq]
   [:div [:svg
@@ -55,8 +61,8 @@
                  :stroke "blue" :stroke-width "1"
                  :fill "white" :fill-opacity "0"}]
          [:path {:cs "100,100"
-                 :d (str "M0.1,0.5" (sin-seq freq))
-                 :fill "none" :stroke-width "1" :stroke-opacity "1"
+                 :d (sin-seq freq 15)
+                  :fill "none" :stroke-width "1" :stroke-opacity "1"
                  :stroke "green"}]
          ]]
   )
@@ -64,6 +70,7 @@
 (defn simplify-event
   [evt]
   {:x (.-clientX evt)
+   :y (.-clientY evt)
    :type (.-type evt)})
 
 (defn reset-scrubber []
