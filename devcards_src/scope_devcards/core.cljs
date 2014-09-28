@@ -126,7 +126,7 @@
      [:em "y: " (:y cursor)]])))
 
 
-(defn scrubbable-widget [cursor owner]
+(defn scrubbable-widget [id target cursor owner]
      (reify
        om/IRenderState
        (render-state [_ state]
@@ -134,26 +134,24 @@
           [:div {:class "container"}
            (om/build scrubbable
                      (:scrubbable cursor)
-                     {:opts {:id "scrubbing-sine"
-                             :build-fn (om/build x-y-viewer (:scrubbable cursor))}})]))))
+                     {:opts {:id id
+                             :build-fn (om/build target (:scrubbable cursor))}})]))))
 
 (defn sin-viewer [cursor owner]
-  (reify
-    om/IRenderState
-    (render-state [_ state]
-      (let [freq (:x (:scrubbable cursor))
-            ampl (:y (:scrubbable cursor))]
-        (sab/html (graph freq ampl))))))
-
+  (om/component
+   (let [freq (:x cursor)
+         ampl (:y cursor)]
+     (sab/html
+      (graph freq ampl)))))
 
 (def app-model
   (atom {:scrubbable {:x 50 :y 15}}))
 
 (defcard om-generic-scrubber
-  (dc/om-root-card scrubbable-widget app-model))
+  (dc/om-root-card (partial scrubbable-widget "x-y-view" x-y-viewer) app-model))
 
 (defcard om-sin-view
-  (dc/om-root-card sin-viewer app-model))
+  (dc/om-root-card (partial scrubbable-widget "sine-view" sin-viewer) app-model))
 
 (defcard edn-card-shared
   (dc/edn-card app-model))
