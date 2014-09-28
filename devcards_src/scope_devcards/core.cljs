@@ -119,12 +119,6 @@
                                :-webkit-user-select "none"}}
                  build-fn]))))
 
-(defn x-y-viewer [cursor owner]
-  (om/component
-   (sab/html
-    [:div [:em "x: " (:x cursor) ", "]
-     [:em "y: " (:y cursor)]])))
-
 
 (defn scrubbable-widget [id target cursor owner]
      (reify
@@ -136,6 +130,12 @@
                      (:scrubbable cursor)
                      {:opts {:id id
                              :build-fn (om/build target (:scrubbable cursor))}})]))))
+
+(defn x-y-viewer [cursor owner]
+  (om/component
+   (sab/html
+    [:div [:em "x: " (:x cursor) ", "]
+     [:em "y: " (:y cursor)]])))
 
 (defn sin-viewer [cursor owner]
   (om/component
