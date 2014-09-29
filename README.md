@@ -3,10 +3,7 @@ scrubby-example
 
 Demo of a generic om widget wrapper to make om widgets "scrubbable"
 
-
-This won't quite work out of the box, as it's waiting on a pull request to https://github.com/bhauman/devcards
-
-Once that's up to date, you can play with this by doing the following:
+You can play with this by doing the following:
 
     git clone git@github.com:jwhitlark/scrubby-example.git
     cd scrubby-example
