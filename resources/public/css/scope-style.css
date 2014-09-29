@@ -1,1 +1,8 @@
 /* scope CSS */
+.scrubber {
+  z-index: 100;
+  color: #000;
+  border-bottom: 1px dotted #00f;
+  cursor: all-scroll;
+  display: inline-block;
+}
